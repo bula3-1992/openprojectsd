@@ -64,7 +64,7 @@ module OpenProject
       # Destroy all sessions for current_user on login
       'drop_old_sessions_on_login' => false,
       # url-path prefix
-      'rails_relative_url_root' => '/server1',
+      'rails_relative_url_root' => '',
       'rails_force_ssl' => false,
       'rails_asset_host' => nil,
 

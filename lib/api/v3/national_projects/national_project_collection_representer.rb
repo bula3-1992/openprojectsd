@@ -42,7 +42,7 @@ module API
         element_decorator ::API::V3::NationalProjects::NationalProjectRepresenter
 
         def initialize(models,
-                       _params,
+                       params,
                        self_link,
                        current_user:,
                        global_role:)
@@ -51,11 +51,13 @@ module API
                 current_user: current_user)
           @current_user = current_user
           @global_role = global_role
+          @param_context = params[:context]
         end
 
         collection :elements,
                    getter: ->(*) {
                      @elements = []
+                     defilter
                      render_tree(represented, nil)
                      #Rails.logger.info('repr: ' + represented.to_json)
                      #Rails.logger.info(@elements ? @elements.size() : 'empty mat proj')
@@ -66,7 +68,29 @@ module API
 
         private
 
+        def defilter
+          @ids = case @param_context
+                 when 'protocol'
+                   projects = [0]
+                   Project.all.each do |project|
+                     exist = which_role(project, current_user, @global_role)
+                     if exist
+                       projects << project.id
+                     end
+                   end
+                   temp_ids = [0]
+                   temp_ids << MeetingProtocol
+                     .joins(:meeting)
+                     .where("meetings.project_id in (" + projects.join(",") + ")")
+                     .select("meetings.project_id").map(&:project_id).uniq
+                   Project.where("id in (" + temp_ids.join(",") + ")")
+                 else
+                   []
+                 end
+        end
+
         def render_tree(tree, pid)
+          puts @param_context
           represented.map do |el|
             # Rails.logger.info("render_tree: #{el.id} PID: #{pid} el.parent_id= #{el.parent_id}")
             #Rails.logger.info('current_user: ' + @current_user.name + ' @global_role: ' + @global_role.to_s)

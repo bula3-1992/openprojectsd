@@ -14,7 +14,7 @@ export class BlueTableProtocolService extends BlueTableService {
       let data_local:any = {};
       this.national_project_titles = [];
       this.halResourceService
-        .get<CollectionResource<HalResource>>(this.pathHelper.api.v3.national_projects.toString())
+        .get<CollectionResource<HalResource>>(this.pathHelper.api.v3.national_projects.toString(), {context: "protocol"})
         .toPromise()
         .then((resources:CollectionResource<HalResource>) => {
           this.national_projects = resources.elements;

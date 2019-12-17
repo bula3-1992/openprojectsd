@@ -18,7 +18,7 @@ export class BlueTableKtService extends BlueTableService {
     return new Promise((resolve) => {
       this.national_project_titles = [];
       this.halResourceService
-        .get<CollectionResource<HalResource>>(this.pathHelper.api.v3.national_projects.toString())
+        .get<CollectionResource<HalResource>>(this.pathHelper.api.v3.national_projects.toString(), {context: 'kt'})
         .toPromise()
         .then((resources:CollectionResource<HalResource>) => {
           this.national_projects = resources.elements;
