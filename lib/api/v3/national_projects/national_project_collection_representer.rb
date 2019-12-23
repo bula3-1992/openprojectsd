@@ -52,6 +52,8 @@ module API
           @current_user = current_user
           @global_role = global_role
           @param_context = params[:context]
+          @raion = params[:raion]
+          @project = params[:project]
         end
 
         collection :elements,
@@ -70,15 +72,75 @@ module API
 
         def defilter
           @ids = [0]
-          case @param_context
-          when 'protocol'
-            projects = [0]
-            Project.all.each do |project|
-              exist = which_role(project, current_user, @global_role)
-              if exist
+          projects = [0]
+          if @project
+            projects << @project
+          else
+            Project.where(type: 'project').visible_by(@current_user).each do |project|
+              exist = which_role(project, @current_user, @global_role)
+              if exist and project.visible? @current_user
                 projects << project.id
               end
             end
+          end
+          case @param_context
+          when 'desktop'
+            meropriyatie = Type.find_by name: I18n.t(:default_type_task)
+            kt = Type.find_by name: I18n.t(:default_type_milestone)
+            if @raion
+              rprojects = Raion.projects_by_id(@raion, projects).map { |p| p.id }
+              records_array = ActiveRecord::Base.connection.execute <<~SQL
+                select p.id, p.national_project_id, p.federal_project_id, p1.preds, p1.prosr, p1.riski, p2.ispolneno, p2.all_wps from
+                    (select * from projects where id in (#{rprojects.join(",")})) as p
+                left join
+                    (select project_id, sum(preds) as preds, sum(prosr) as prosr, sum(riski) as riski
+                    from (
+                             select wp.project_id,
+                                    case when wp.days_to_due >= 0 and wp.days_to_due <= 14 and wp.raion_id = #{@raion} and wp.type_id = #{meropriyatie.id} and wp.ispolneno = false then 1 else 0 end as preds,
+                                    case when wp.days_to_due < 0 and wp.raion_id = #{@raion} and wp.type_id = #{kt.id} and wp.ispolneno = false then 1 else 0 end as prosr,
+                                    case when wp.raion_id = #{@raion} then wp.created_problem_count else 0 end as riski
+                             from v_work_package_ispoln_stat as wp
+                             where wp.raion_id = #{@raion}
+                         ) as slice
+                    group by project_id) as p1
+                on p.id = p1.project_id
+                left join
+                    (select project_id, sum(ispolneno) as ispolneno, sum(all_work_packages) as all_wps
+                    from v_project_ispoln_stat
+                    group by project_id) as p2
+                on p.id = p2.project_id
+              SQL
+            else
+              records_array = ActiveRecord::Base.connection.execute <<~SQL
+                select p.id, p.national_project_id, p.federal_project_id, p1.preds, p1.prosr, p1.riski, p2.ispolneno, p2.all_wps from
+                    (select * from projects where id in (#{projects.join(",")})) as p
+                left join
+                    (select project_id, sum(preds) as preds, sum(prosr) as prosr, sum(created_problem_count) as riski
+                    from (
+                             select wp.project_id,
+                                    case when wp.days_to_due >= 0 and wp.days_to_due <= 14 and wp.type_id = #{meropriyatie.id} and wp.ispolneno = false then 1 else 0 end as preds,
+                                    case when wp.days_to_due < 0 and wp.type_id = #{kt.id} and wp.ispolneno = false then 1 else 0 end as prosr,
+                                    wp.created_problem_count
+                             from v_work_package_ispoln_stat as wp
+                         ) as slice
+                    group by project_id) as p1
+                on p.id = p1.project_id
+                left join
+                    (select project_id, sum(ispolneno) as ispolneno, sum(all_work_packages) as all_wps
+                    from v_project_ispoln_stat
+                    group by project_id) as p2
+                on p.id = p2.project_id
+              SQL
+            end
+            records_array.map do |pr|
+              if pr['federal_project_id']
+                @ids << pr['federal_project_id']
+              end
+              if pr['national_project_id']
+                @ids << pr['national_project_id']
+              end
+            end
+          when 'protocol'
             temp_ids = [0]
             temp_ids += MeetingProtocol
                         .joins(:meeting)
